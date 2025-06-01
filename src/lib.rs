@@ -102,10 +102,10 @@ mod tests {
             .repeat::<Succ2<Succ<Zero>>>()
             .then::<[f32; 7]>();
 
-        assert_eq!(r.0.len(), 3);
+        assert_eq!(r.0.len(), 7);
         assert_eq!(r.1.0.len(), 12);
         assert_eq!(r.1.1.0.len(), 12);
         assert_eq!(r.1.1.1.0.len(), 12);
-        assert_eq!(r.1.1.1.1.0.len(), 7);
+        assert_eq!(r.1.1.1.1.0.len(), 3);
     }
 }
