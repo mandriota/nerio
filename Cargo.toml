@@ -1,0 +1,12 @@
+[package]
+name = "nerio"
+version = "0.1.0"
+authors = ["Mark Mandriota <myriaxont@gmail.com>"]
+edition = "2024"
+description = "generic for neural networks"
+repository = "https://github.com/mandriota/nerio"
+license = "Apache-2.0"
+keywords = ["nerienet", "neural", "network", "nn"]
+categories = ["data-structures"]
+
+[dependencies]
