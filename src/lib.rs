@@ -163,23 +163,22 @@ trait FeedforwardTimes<Idx, Times> {
     fn feedforward_times(&mut self) -> &mut Self;
 }
 
-struct NeuralNetwork<W: List, B: List, A: List, E, F: List> {
+struct NeuralNetwork<W: List, B: List, A: List, F: List> {
     w: W,
     b: B,
     a: A,
-
+		
 		f: F,
-		e: PhantomData<E>,
 }
 
-impl<Idx, W: List, B: List, A: List, E, F: List> FeedforwardTimes<Idx, Zero> for NeuralNetwork<W, B, A, E, F> {
+impl<Idx, W: List, B: List, A: List, F: List> FeedforwardTimes<Idx, Zero> for NeuralNetwork<W, B, A, F> {
     fn feedforward_times(&mut self) -> &mut Self {
         self
     }
 }
 
 impl<Idx, Times, W, B, A, E, Fi, F, const AS: usize, const BS: usize, const CS: usize>
-    FeedforwardTimes<Idx, Succ<Times>> for NeuralNetwork<W, B, A, E, F>
+    FeedforwardTimes<Idx, Succ<Times>> for NeuralNetwork<W, B, A, F>
 where
     E: linalg::Number,
 		Fi: ActivationFn<E>,
@@ -202,7 +201,7 @@ where
     }
 }
 
-impl<W: List + Length, B: List, A: List, E, F: List> NeuralNetwork<W, B, A, E, F>
+impl<W: List + Length, B: List, A: List, F: List> NeuralNetwork<W, B, A, F>
 where
     Self: FeedforwardTimes<Zero, <W as Length>::Output>,
 {
@@ -211,7 +210,7 @@ where
     }
 }
 
-impl<W: List, B: List, A: List, E, F: List> NeuralNetwork<W, B, A, E, F>
+impl<W: List, B: List, A: List, F: List> NeuralNetwork<W, B, A, F>
 {
 		fn new(wba: (W, B, A), f: F) -> Self {
 				Self {
@@ -219,7 +218,6 @@ impl<W: List, B: List, A: List, E, F: List> NeuralNetwork<W, B, A, E, F>
 						b: wba.1,
 						a: wba.2,
 						f,
-						e: PhantomData::<E>,
 				}
 		}
 }
