@@ -299,12 +299,12 @@ mod tests {
 		
     #[test]
     fn some_feedforward() {
-        let wab = layers!(f32; {3}, {8}, {4});
+        let wba = layers!(f32; {3}, {8}, {4});
 				let f = Nil
 						.before::<Sigmoid>()
 						.repeat::<S2>();
 
-        let mut nn = NeuralNetwork::new(wab, f);
+        let mut nn = NeuralNetwork::new(wba, f);
 				nn.w.0.0 = [1.; 32];
         nn.a.0.0 = [1.; 4];
         nn.w.1.0.0 = [1.; 24];
@@ -317,10 +317,10 @@ mod tests {
 
 		#[test]
 		fn feedforward_sum() {
-				let wab = layers!(f32; {1}, {2});
+				let wba = layers!(f32; {1}, {2});
 				let f = Nil.before::<Relu>();
 
-				let mut nn = NeuralNetwork::new(wab, f);
+				let mut nn = NeuralNetwork::new(wba, f);
 				nn.w.0.0 = [1., 1.];
 				nn.a.0.0 = [2., 3.];
 
