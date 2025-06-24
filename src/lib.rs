@@ -112,9 +112,9 @@ where
 struct Layer<E, const S: usize>([E; S]);
 
 impl<E: Default, const S: usize> Default for Layer<E, S> {
-		fn default() -> Self {
-				Layer(array::from_fn(|_| E::default()))
-		}
+    fn default() -> Self {
+        Layer(array::from_fn(|_| E::default()))
+    }
 }
 
 trait Builder: Sized {
@@ -138,25 +138,25 @@ impl Builder for Nil {}
 impl<H, T> Builder for Cons<H, T> {}
 
 trait ActivationFn<E> {
-		fn activate(e: E) -> E;
+    fn activate(e: E) -> E;
 }
 
 #[derive(Default)]
 struct Sigmoid;
 
 impl<E: linalg::Number> ActivationFn<E> for Sigmoid {
-		fn activate(x: E) -> E {
-				E::one() / (E::get_exp(-x) + E::one())
-		}
+    fn activate(x: E) -> E {
+        E::one() / (E::get_exp(-x) + E::one())
+    }
 }
 
 #[derive(Default)]
 struct Relu;
 
 impl<E: linalg::Number> ActivationFn<E> for Relu {
-		fn activate(x: E) -> E {
-				E::get_max(x, E::default())
-		}
+    fn activate(x: E) -> E {
+        E::get_max(x, E::default())
+    }
 }
 
 trait FeedforwardTimes<Idx, Times> {
@@ -167,11 +167,13 @@ struct NeuralNetwork<W: List, B: List, A: List, F: List> {
     w: W,
     b: B,
     a: A,
-		
-		f: F,
+
+    f: F,
 }
 
-impl<Idx, W: List, B: List, A: List, F: List> FeedforwardTimes<Idx, Zero> for NeuralNetwork<W, B, A, F> {
+impl<Idx, W: List, B: List, A: List, F: List> FeedforwardTimes<Idx, Zero>
+    for NeuralNetwork<W, B, A, F>
+{
     fn feedforward_times(&mut self) -> &mut Self {
         self
     }
@@ -181,7 +183,7 @@ impl<Idx, Times, W, B, A, E, Fi, F, const AS: usize, const BS: usize, const CS: 
     FeedforwardTimes<Idx, Succ<Times>> for NeuralNetwork<W, B, A, F>
 where
     E: linalg::Number,
-		Fi: ActivationFn<E>,
+    Fi: ActivationFn<E>,
     F: List + Nth<Idx, Output = Fi>,
     W: List + Nth<Idx, Output = Layer<E, AS>>,
     B: List + Nth<Idx, Output = Layer<E, CS>>,
@@ -189,7 +191,7 @@ where
     Self: FeedforwardTimes<Succ<Idx>, Times>,
 {
     fn feedforward_times(&mut self) -> &mut Self {
-				let activate = Nth::<Idx>::nth(&self.f);
+        let activate = Nth::<Idx>::nth(&self.f);
         let activations = &Nth::<Idx>::nth(&self.a).0;
         let weights = &Nth::<Idx>::nth(&self.w).0;
         let bias = &Nth::<Idx>::nth(&self.b).0;
@@ -210,16 +212,15 @@ where
     }
 }
 
-impl<W: List, B: List, A: List, F: List> NeuralNetwork<W, B, A, F>
-{
-		fn new(wba: (W, B, A), f: F) -> Self {
-				Self {
-						w: wba.0,
-						b: wba.1,
-						a: wba.2,
-						f,
-				}
-		}
+impl<W: List, B: List, A: List, F: List> NeuralNetwork<W, B, A, F> {
+    fn new(wba: (W, B, A), f: F) -> Self {
+        Self {
+            w: wba.0,
+            b: wba.1,
+            a: wba.2,
+            f,
+        }
+    }
 }
 
 macro_rules! layers {
@@ -278,32 +279,32 @@ mod tests {
         // currently layers are set in reverse order
         let (w, b, a) = layers!(f32; {3}, {4} x S2<S1>, {7});
 
-				assert_eq!(w.0.0.len(), 28);
+        assert_eq!(w.0.0.len(), 28);
         assert_eq!(w.1.0.0.len(), 16);
         assert_eq!(w.1.1.0.0.len(), 16);
         assert_eq!(w.1.1.1.0.0.len(), 12);
 
-				assert_eq!(b.0.0.len(), 4);
+        assert_eq!(b.0.0.len(), 4);
         assert_eq!(b.1.0.0.len(), 4);
         assert_eq!(b.1.1.0.0.len(), 4);
         assert_eq!(b.1.1.1.0.0.len(), 3);
 
-				assert_eq!(a.0.0.len(), 7);
+        assert_eq!(a.0.0.len(), 7);
         assert_eq!(a.1.0.0.len(), 4);
         assert_eq!(a.1.1.0.0.len(), 4);
         assert_eq!(a.1.1.1.0.0.len(), 4);
         assert_eq!(a.1.1.1.1.0.0.len(), 3);
     }
-		
+
     #[test]
     fn some_feedforward() {
         let wba = layers!(f32; {3}, {8}, {4});
-				let f = Nil
+        let f = Nil
 						.before::<Sigmoid>()
 						.repeat::<S2>();
 
         let mut nn = NeuralNetwork::new(wba, f);
-				nn.w.0.0 = [1.; 32];
+        nn.w.0.0 = [1.; 32];
         nn.a.0.0 = [1.; 4];
         nn.w.1.0.0 = [1.; 24];
         nn.b.1.0.0 = [1.; 3];
@@ -313,16 +314,16 @@ mod tests {
         println!("{:?}", nn.a.0);
     }
 
-		#[test]
-		fn feedforward_sum() {
-				let wba = layers!(f32; {1}, {2});
-				let f = Nil.before::<Relu>();
+    #[test]
+    fn feedforward_sum() {
+        let wba = layers!(f32; {1}, {2});
+        let f = Nil.before::<Relu>();
 
-				let mut nn = NeuralNetwork::new(wba, f);
-				nn.w.0.0 = [1., 1.];
-				nn.a.0.0 = [2., 3.];
+        let mut nn = NeuralNetwork::new(wba, f);
+        nn.w.0.0 = [1., 1.];
+        nn.a.0.0 = [2., 3.];
 
-				nn.feedforward();
-				assert!(f32::abs(nn.a.1.0.0[0] - 5.) < 0.000001);
-		}
+        nn.feedforward();
+        assert!(f32::abs(nn.a.1.0.0[0] - 5.) < 0.000001);
+    }
 }
