@@ -3,9 +3,8 @@
 use std::array;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::ops::{Add, AddAssign, Div, Index, IndexMut, Mul};
 
-mod linalg;
+pub mod linalg;
 use linalg::{vmdot, vvadd};
 
 fn sigmoid<E: linalg::Number>(x: E) -> E {
@@ -138,15 +137,15 @@ impl Builder for Nil {}
 impl<H, T> Builder for Cons<H, T> {}
 
 trait ActivationFn<E> {
-    fn activate(e: E) -> E;
+    fn activate<const S: usize>(v: &[E; S], i: usize) -> E;
 }
 
 #[derive(Default)]
 struct Sigmoid;
 
 impl<E: linalg::Number> ActivationFn<E> for Sigmoid {
-    fn activate(x: E) -> E {
-        E::one() / (E::get_exp(-x) + E::one())
+    fn activate<const S: usize>(v: &[E; S], i: usize) -> E {
+        E::one() / (E::get_exp(-v[i]) + E::one())
     }
 }
 
@@ -154,8 +153,8 @@ impl<E: linalg::Number> ActivationFn<E> for Sigmoid {
 struct Relu;
 
 impl<E: linalg::Number> ActivationFn<E> for Relu {
-    fn activate(x: E) -> E {
-        E::get_max(x, E::default())
+    fn activate<const S: usize>(v: &[E; S], i: usize) -> E {
+        E::get_max(v[i], E::default())
     }
 }
 
@@ -191,13 +190,14 @@ where
     Self: FeedforwardTimes<Succ<Idx>, Times>,
 {
     fn feedforward_times(&mut self) -> &mut Self {
-        let activate = Nth::<Idx>::nth(&self.f);
         let activations = &Nth::<Idx>::nth(&self.a).0;
         let weights = &Nth::<Idx>::nth(&self.w).0;
         let bias = &Nth::<Idx>::nth(&self.b).0;
 
-        let activations = vvadd(&vmdot(activations, weights), bias).map(|e| Fi::activate(e));
-        Nth::<Succ<Idx>>::nth_mut(&mut self.a).0 = activations;
+        Nth::<Succ<Idx>>::nth_mut(&mut self.a).0 = {
+            let activations = vvadd(&vmdot(activations, weights), bias);
+            array::from_fn(|i| Fi::activate(&activations, i))
+        };
 
         FeedforwardTimes::<Succ<Idx>, Times>::feedforward_times(self)
     }

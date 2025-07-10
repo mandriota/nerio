@@ -1,4 +1,4 @@
-use core::array;
+use std::array;
 use std::marker::Copy;
 use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub};
 use std::simd::{f32x4, simd_swizzle};
