@@ -133,26 +133,6 @@ impl<E: Default, const S: usize> Default for Layer<E, S> {
     }
 }
 
-trait Builder: Sized {
-    fn before<F>(self) -> Cons<F, Self>
-    where
-        F: Default,
-    {
-        Cons(F::default(), self)
-    }
-
-    fn repeat<N>(self) -> <Self as Repeat<N>>::Output
-    where
-        Self: List + Repeat<N>,
-        <Self as Repeat<N>>::Output: Default,
-    {
-        <Self as Repeat<N>>::Output::default()
-    }
-}
-
-impl Builder for Nil {}
-impl<H, T> Builder for Cons<H, T> {}
-
 trait ActivationFn<E> {
     fn activate<const S: usize>(v: &[E; S], i: usize) -> E;
 }
@@ -289,7 +269,7 @@ mod tests {
     #[test]
     fn some_feedforward() {
         let wba = <Layers!(f32; {4}, {8}, {3})>::default();
-        let f = Nil.before::<Sigmoid>().repeat::<S2>();
+        let f = <HList!(Sigmoid : S2)>::default();
 
         let mut nn = NeuralNetwork::new(wba, f);
         nn.w.0.0 = [1.; 32];
@@ -305,7 +285,7 @@ mod tests {
     #[test]
     fn feedforward_sum() {
         let wba = <Layers!(f32; {2}, {1})>::default();
-        let f = Nil.before::<Relu>();
+        let f = <HList!(Relu)>::default();
 
         let mut nn = NeuralNetwork::new(wba, f);
         nn.w.0.0 = [1., 1.];
