@@ -25,6 +25,23 @@ struct Cons<H, T>(H, T);
 impl List for Nil {}
 impl<H, T: List> List for Cons<H, T> {}
 
+macro_rules! HList {
+		() => { Nil };
+		($t:ty $(, $tn:ty $(: $rn:ty)?)*) => {
+				Cons<$t, HList!($($tn $(: $rn)*),*)>
+		};
+		($t:ty : $r:ty $(, $tn:ty $(: $rn:ty)?)*) => {
+				<Cons<$t, HList!($($tn $(: $rn)*),*)> as Repeat<$r>>::Output
+		};
+}
+
+macro_rules! hlist {
+		() => { Nil };
+		($t:literal $(, $tn:literal)*) => {
+				Cons($t, hlist!($($tn)*))
+		};
+}
+
 #[derive(Default)]
 struct Zero;
 #[derive(Default)]
@@ -223,49 +240,23 @@ impl<W: List, B: List, A: List, F: List> NeuralNetwork<W, B, A, F> {
     }
 }
 
-macro_rules! layers {
-		(@wbuilder $rt:expr; $t:ty; {$s:expr} $(x $r:ty)?) => {
-				$rt
+macro_rules! Layers {
+		(@wbuilder $t:ty; {$s:expr} $(: $r:ty)?) => {
+				Nil
 		};
-		(@wbuilder $rt:expr; $t:ty; {$sp:expr} $(x $rp:ty)?, {$sn:expr} $(x $rn:ty)? $(, {$s:expr} $(x $r:ty)?)*) => {
-				layers!(
-						@wbuilder
-						$rt
-						    $(
-							      .before::<Layer<$t, {$sp*$sp}>>()
-							      .repeat::<<$rp as Prec>::Output>()
-							  )*
-							  .before::<Layer<$t, {$sp*$sn}>>();
-						$t;
-						{$sn} $(x $rn)* $(, {$s} $(x $r)*)*
-				)
+		(@wbuilder $t:ty; {$sp:expr}, {$sn:expr} $(: $rn:ty)? $(, {$s:expr} $(: $r:ty)?)*) => {
+				Cons<Layer<$t, {$sp*$sn}>, Layers!(@wbuilder $t; {$sn} $(: $rn)* $(, {$s} $(: $r)?)*)>
 		};
-		(@bbuilder $rt:expr; $t:ty; {$s:expr} $(x $r:ty)?) => {
-				$rt
-						$(
-								.before::<Layer<$t, $s>>()
-								.repeat::<<$r as Prec>::Output>()
-						)*
+		(@wbuilder $t:ty; {$sp:expr} : $rp:ty, {$sn:expr} $(: $rn:ty)? $(, {$s:expr} $(: $r:ty)?)*) => {
+				<Cons<Layer<$t, {$sp*$sp}>,
+				    Layers!(@wbuilder $t; {$sp}, {$sn} $(: $rn)* $(, {$s} $(: $r)?)*)
+				> as Repeat<<$rp as Prec>::Output>>::Output
 		};
-		(@bbuilder $rt:expr; $t:ty; {$sp:expr} $(x $rp:ty)? $(, {$s:expr} $(x $r:ty)?)*) => {
-				layers!(
-						@bbuilder
-						$rt
-						    .before::<Layer<$t, $sp>>()
-							  $(.repeat::<$rp>())*;
-						$t;
-						$({$s} $(x $r)*),*
-				)
-		};
-		($t:ty; $({$s:expr} $(x $r:ty)?),+) => {
+		($t:ty; {$sn:expr} $(: $rn:ty)? $(, {$s:expr} $(: $r:ty)?)*) => {
 				(
-						layers!(@wbuilder Nil; $t; $({$s} $(x $r)*),*),
-						layers!(@bbuilder Nil; $t; $({$s} $(x $r)*),*),
-						Nil
-								$(
-										.before::<Layer<$t, $s>>()
-										$(.repeat::<$r>())*
-								)*,
+						Layers!(@wbuilder $t; {$sn} $(: $rn)* $(, {$s} $(: $r)*)*),
+						HList!($(Layer<$t, $s> $(: $r)*),*),
+						HList!(Layer<$t, $sn> $(: $rn)* $(, Layer<$t, $s> $(: $r)*)*),
 				)
 		};
 }
@@ -276,8 +267,7 @@ mod tests {
 
     #[test]
     fn create_some_layers() {
-        // currently layers are set in reverse order
-        let (w, b, a) = layers!(f32; {3}, {4} x S2<S1>, {7});
+        let (w, b, a) = <Layers!(f32; {7}, {4} : S2<S1>, {3})>::default();
 
         assert_eq!(w.0.0.len(), 28);
         assert_eq!(w.1.0.0.len(), 16);
@@ -298,10 +288,8 @@ mod tests {
 
     #[test]
     fn some_feedforward() {
-        let wba = layers!(f32; {3}, {8}, {4});
-        let f = Nil
-						.before::<Sigmoid>()
-						.repeat::<S2>();
+        let wba = <Layers!(f32; {4}, {8}, {3})>::default();
+        let f = Nil.before::<Sigmoid>().repeat::<S2>();
 
         let mut nn = NeuralNetwork::new(wba, f);
         nn.w.0.0 = [1.; 32];
@@ -316,7 +304,7 @@ mod tests {
 
     #[test]
     fn feedforward_sum() {
-        let wba = layers!(f32; {1}, {2});
+        let wba = <Layers!(f32; {2}, {1})>::default();
         let f = Nil.before::<Relu>();
 
         let mut nn = NeuralNetwork::new(wba, f);

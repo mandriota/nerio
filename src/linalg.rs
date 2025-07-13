@@ -59,13 +59,16 @@ fn mat_block2x2_dot(a: f32x4, b: f32x4) -> f32x4 {
 
 pub fn vvadd<T, const N: usize>(a: &[T; N], b: &[T; N]) -> [T; N]
 where
-    T: Copy + Accum,
+    T: Copy + Add<Output = T>,
 {
-    let mut t = *a;
-    for i in 0..a.len() {
-        t[i] += b[i];
-    }
-    t
+    array::from_fn(|i| a[i] + b[i])
+}
+
+pub fn vvhadamard<T, const N: usize>(a: &[T; N], b: &[T; N]) -> [T; N]
+where
+		T: Copy + Mul<Output = T>,
+{
+		array::from_fn(|i| a[i] * b[i])
 }
 
 // TODO: try block based vector by matrix dot product
