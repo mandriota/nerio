@@ -271,7 +271,7 @@ mod tests {
 
     #[test]
     fn create_some_layers() {
-        let (w, b, a) = <Layers!(f32; {7}, {4} : S2<S1>, {3})>::default();
+        let (w, b, a) = <Layers!(f32; {7}, {4}: S2<S1>, {3})>::default();
 
         assert_eq!(w.0.0.len(), 28);
         assert_eq!(w.1.0.0.len(), 16);
