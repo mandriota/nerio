@@ -215,15 +215,15 @@ trait ListTrio {
     type A: List;
 }
 
-impl<A, B, C> ListTrio for (A, B, C)
+impl<W, B, A> ListTrio for (W, B, A)
 where
-    A: List + Default,
+    W: List + Default,
     B: List + Default,
-    C: List + Default,
+    A: List + Default,
 {
-    type W = A;
+    type W = W;
     type B = B;
-    type A = C;
+    type A = A;
 }
 
 impl<Wba, F> NeuralNetwork<Wba, F>
