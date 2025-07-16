@@ -176,14 +176,14 @@ impl<Idx, Wba: ListTrio, F: List> FeedforwardTimes<Idx, Zero> for NeuralNetwork<
 impl<Idx, Times, Wba, E, Fi, F, const AS: usize, const BS: usize, const CS: usize>
     FeedforwardTimes<Idx, Succ<Times>> for NeuralNetwork<Wba, F>
 where
-    E: linalg::Number,
-    Fi: ActivationFn<E>,
-    F: List + Nth<Idx, Output = Fi>,
+		Self: FeedforwardTimes<Succ<Idx>, Times>,
     Wba: ListTrio,
     Wba::W: Nth<Idx, Output = Layer<E, AS>>,
     Wba::B: Nth<Idx, Output = Layer<E, CS>>,
     Wba::A: Nth<Idx, Output = Layer<E, BS>> + Nth<Succ<Idx>, Output = Layer<E, CS>>,
-    Self: FeedforwardTimes<Succ<Idx>, Times>,
+    E: linalg::Number,
+    Fi: ActivationFn<E>,
+    F: List + Nth<Idx, Output = Fi>,
 {
     fn feedforward_times(&mut self) -> &mut Self {
         let activations = &Nth::<Idx>::nth(&self.a).0;
@@ -201,8 +201,8 @@ where
 
 impl<Wba: ListTrio, F: List> NeuralNetwork<Wba, F>
 where
+		Self: FeedforwardTimes<Zero, <Wba::W as Length>::Output>,
     Wba::W: Length,
-    Self: FeedforwardTimes<Zero, <Wba::W as Length>::Output>,
 {
     fn feedforward(&mut self) -> &mut Self {
         FeedforwardTimes::<Zero, <Wba::W as Length>::Output>::feedforward_times(self)
