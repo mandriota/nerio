@@ -159,31 +159,30 @@ trait FeedforwardTimes<Idx, Times> {
     fn feedforward_times(&mut self) -> &mut Self;
 }
 
-struct NeuralNetwork<W: List, B: List, A: List, F: List> {
-    w: W,
-    b: B,
-    a: A,
+struct NeuralNetwork<Wba: ListTrio, F: List> {
+    w: Wba::W,
+    b: Wba::B,
+    a: Wba::A,
 
     f: F,
 }
 
-impl<Idx, W: List, B: List, A: List, F: List> FeedforwardTimes<Idx, Zero>
-    for NeuralNetwork<W, B, A, F>
-{
+impl<Idx, Wba: ListTrio, F: List> FeedforwardTimes<Idx, Zero> for NeuralNetwork<Wba, F> {
     fn feedforward_times(&mut self) -> &mut Self {
         self
     }
 }
 
-impl<Idx, Times, W, B, A, E, Fi, F, const AS: usize, const BS: usize, const CS: usize>
-    FeedforwardTimes<Idx, Succ<Times>> for NeuralNetwork<W, B, A, F>
+impl<Idx, Times, Wba, E, Fi, F, const AS: usize, const BS: usize, const CS: usize>
+    FeedforwardTimes<Idx, Succ<Times>> for NeuralNetwork<Wba, F>
 where
     E: linalg::Number,
     Fi: ActivationFn<E>,
     F: List + Nth<Idx, Output = Fi>,
-    W: List + Nth<Idx, Output = Layer<E, AS>>,
-    B: List + Nth<Idx, Output = Layer<E, CS>>,
-    A: List + Nth<Idx, Output = Layer<E, BS>> + Nth<Succ<Idx>, Output = Layer<E, CS>>,
+    Wba: ListTrio,
+    Wba::W: Nth<Idx, Output = Layer<E, AS>>,
+    Wba::B: Nth<Idx, Output = Layer<E, CS>>,
+    Wba::A: Nth<Idx, Output = Layer<E, BS>> + Nth<Succ<Idx>, Output = Layer<E, CS>>,
     Self: FeedforwardTimes<Succ<Idx>, Times>,
 {
     fn feedforward_times(&mut self) -> &mut Self {
@@ -200,22 +199,47 @@ where
     }
 }
 
-impl<W: List + Length, B: List, A: List, F: List> NeuralNetwork<W, B, A, F>
+impl<Wba: ListTrio, F: List> NeuralNetwork<Wba, F>
 where
-    Self: FeedforwardTimes<Zero, <W as Length>::Output>,
+    Wba::W: Length,
+    Self: FeedforwardTimes<Zero, <Wba::W as Length>::Output>,
 {
     fn feedforward(&mut self) -> &mut Self {
-        FeedforwardTimes::<Zero, <W as Length>::Output>::feedforward_times(self)
+        FeedforwardTimes::<Zero, <Wba::W as Length>::Output>::feedforward_times(self)
     }
 }
 
-impl<W: List, B: List, A: List, F: List> NeuralNetwork<W, B, A, F> {
-    fn new(wba: (W, B, A), f: F) -> Self {
+trait ListTrio {
+    type W: List;
+    type B: List;
+    type A: List;
+}
+
+impl<A, B, C> ListTrio for (A, B, C)
+where
+    A: List + Default,
+    B: List + Default,
+    C: List + Default,
+{
+    type W = A;
+    type B = B;
+    type A = C;
+}
+
+impl<Wba, F> NeuralNetwork<Wba, F>
+where
+    Wba: ListTrio,
+    Wba::W: Default,
+    Wba::B: Default,
+    Wba::A: Default,
+    F: List + Default,
+{
+    fn new() -> Self {
         Self {
-            w: wba.0,
-            b: wba.1,
-            a: wba.2,
-            f,
+            w: Wba::W::default(),
+            b: Wba::B::default(),
+            a: Wba::A::default(),
+            f: F::default(),
         }
     }
 }
@@ -268,10 +292,10 @@ mod tests {
 
     #[test]
     fn some_feedforward() {
-        let wba = <Layers!(f32; {4}, {8}, {3})>::default();
-        let f = <HList!(Sigmoid : S2)>::default();
+        type Wba = Layers!(f32; {4}, {8}, {3});
+        type F = HList!(Sigmoid: S2);
 
-        let mut nn = NeuralNetwork::new(wba, f);
+        let mut nn = NeuralNetwork::<Wba, F>::new();
         nn.w.0.0 = [1.; 32];
         nn.a.0.0 = [1.; 4];
         nn.w.1.0.0 = [1.; 24];
@@ -284,10 +308,10 @@ mod tests {
 
     #[test]
     fn feedforward_sum() {
-        let wba = <Layers!(f32; {2}, {1})>::default();
-        let f = <HList!(Relu)>::default();
+        type Wba = Layers!(f32; {2}, {1});
+        type F = HList!(Relu);
 
-        let mut nn = NeuralNetwork::new(wba, f);
+        let mut nn = NeuralNetwork::<Wba, F>::new();
         nn.w.0.0 = [1., 1.];
         nn.a.0.0 = [2., 3.];
 
