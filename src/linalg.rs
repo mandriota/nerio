@@ -19,7 +19,7 @@ pub trait Number:
     + Div<Output = Self>
 {
     fn get_exp(self) -> Self;
-		fn get_max(self, r: Self) -> Self;
+    fn get_max(self, r: Self) -> Self;
 
     fn one() -> Self {
         Self::get_exp(Self::default())
@@ -30,10 +30,10 @@ impl Number for f32 {
     fn get_exp(self) -> Self {
         f32::exp(self)
     }
-		
-		fn get_max(self, r: Self) -> Self {
-				f32::max(self, r)
-		}
+
+    fn get_max(self, r: Self) -> Self {
+        f32::max(self, r)
+    }
 }
 
 impl Number for f64 {
@@ -41,9 +41,9 @@ impl Number for f64 {
         f64::exp(self)
     }
 
-		fn get_max(self, r: Self) -> Self {
-				f64::max(self, r)
-		}
+    fn get_max(self, r: Self) -> Self {
+        f64::max(self, r)
+    }
 }
 
 fn mat_block2x2_dot(a: f32x4, b: f32x4) -> f32x4 {
@@ -66,24 +66,24 @@ where
 
 pub fn vvhadamard<T, const N: usize>(a: &[T; N], b: &[T; N]) -> [T; N]
 where
-		T: Copy + Mul<Output = T>,
+    T: Copy + Mul<Output = T>,
 {
-		array::from_fn(|i| a[i] * b[i])
+    array::from_fn(|i| a[i] * b[i])
 }
 
 // TODO: try block based vector by matrix dot product
-pub fn vmdot<T, const VS: usize, const MS: usize, const MC: usize>(
-    v: &[T; VS],
-    m: &[T; MS],
-) -> [T; MC]
+pub fn vmdot<T, const VS: usize, const MC: usize>(v: &[T; VS], m: &[[T; VS]; MC]) -> [T; MC]
 where
     T: Copy + RepeatableAccum,
 {
+    // TODO: compare assembly with normal iteration (without flattening)
+    let m_flattened = m.as_flattened();
+
     array::from_fn(|i| {
-        let mut rt = m[i * VS] * v[0];
+        let mut rt = m_flattened[i * VS] * v[0];
 
         for j in 1..VS {
-            rt += m[i * VS + j] * v[j];
+            rt += m_flattened[i * VS + j] * v[j];
         }
 
         rt
@@ -97,11 +97,11 @@ mod tests {
     #[test]
     fn matrix_by_vector_dot_product() {
         let v = [1., 2., 1.];
-        let m = [2., 1., 7., 6., 5., 8.];
+        let m = [[2., 1., 7.], [6., 5., 8.]];
 
         let r: [f32; 2] = vmdot(&v, &m);
 
-				assert!(f32::abs(r[0] - 11.) < 0.000001);
-				assert!(f32::abs(r[1] - 24.) < 0.000001);
+        assert!(f32::abs(r[0] - 11.) < 0.000001);
+        assert!(f32::abs(r[1] - 24.) < 0.000001);
     }
 }

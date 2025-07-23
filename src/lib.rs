@@ -124,25 +124,45 @@ where
     }
 }
 
-#[derive(Debug)]
-struct Layer<E, const S: usize>([E; S]);
+trait ListQuartet {
+    type W: List;
+    type B: List;
+    type Z: List;
+    type A: List;
+}
 
-impl<E: Default, const S: usize> Default for Layer<E, S> {
+impl<W, B, Z, A> ListQuartet for (W, B, Z, A)
+where
+    W: List + Default,
+    B: List + Default,
+    Z: List + Default,
+    A: List + Default,
+{
+    type W = W;
+    type B = B;
+    type Z = Z;
+    type A = A;
+}
+
+#[derive(Debug)]
+struct Layer<E, const R: usize, const C: usize>([[E; R]; C]);
+
+impl<E: Default, const R: usize, const C: usize> Default for Layer<E, R, C> {
     fn default() -> Self {
-        Layer(array::from_fn(|_| E::default()))
+        Layer(array::from_fn(|_| array::from_fn(|_| E::default())))
     }
 }
 
 trait ActivationFn<E> {
-    fn activate<const S: usize>(v: &[E; S], i: usize) -> E;
+    fn activate<const S: usize>(z: &[E; S], i: usize) -> E;
 }
 
 #[derive(Default)]
 struct Sigmoid;
 
 impl<E: linalg::Number> ActivationFn<E> for Sigmoid {
-    fn activate<const S: usize>(v: &[E; S], i: usize) -> E {
-        E::one() / (E::get_exp(-v[i]) + E::one())
+    fn activate<const S: usize>(z: &[E; S], i: usize) -> E {
+        E::one() / (E::get_exp(-z[i]) + E::one())
     }
 }
 
@@ -150,96 +170,184 @@ impl<E: linalg::Number> ActivationFn<E> for Sigmoid {
 struct Relu;
 
 impl<E: linalg::Number> ActivationFn<E> for Relu {
-    fn activate<const S: usize>(v: &[E; S], i: usize) -> E {
-        E::get_max(v[i], E::default())
+    fn activate<const S: usize>(z: &[E; S], i: usize) -> E {
+        E::get_max(z[i], E::default())
     }
 }
 
-trait FeedforwardTimes<Idx, Times> {
-    fn feedforward_times(&mut self) -> &mut Self;
+trait FeedforwardAt<Idx, NetLength> {
+    type InputLayer;
+    type OutputLayer;
+
+    fn feedforward_at(&self, a: Self::InputLayer) -> Self::OutputLayer;
 }
 
-struct NeuralNetwork<Wba: ListTrio, F: List> {
-    w: Wba::W,
-    b: Wba::B,
-    a: Wba::A,
+struct Feedforwarder<W: List, B: List, F: List> {
+    w: W,
+    b: B,
 
     f: F,
 }
 
-impl<Idx, Wba: ListTrio, F: List> FeedforwardTimes<Idx, Zero> for NeuralNetwork<Wba, F> {
-    fn feedforward_times(&mut self) -> &mut Self {
+// impl<Idx, W: List, B: List, F: List> FeedforwardAt<Idx, Zero> for Feedforwarder<W, B, F>
+// where
+//     B: Nth<Idx>,
+// {
+//     type InputLayer = <B as Nth<Idx>>::Output;
+//     type OutputLayer = Self::InputLayer;
+
+//     fn feedforward_at(&self, a: Self::InputLayer) -> Self::OutputLayer {
+//         a
+//     }
+// }
+
+// impl<Idx, NetLength, W, B, E, Fi, F, const AS: usize, const CS: usize>
+//     FeedforwardAt<Idx, Succ<NetLength>> for Feedforwarder<W, B, F>
+// where
+//     Self: FeedforwardAt<Succ<Idx>, NetLength>,
+//     W: List + Nth<Idx, Output = Layer<E, AS>>,
+//     B: List + Nth<Idx, Output = Layer<E, CS>>,
+//     E: linalg::Number,
+//     Fi: ActivationFn<E>,
+//     F: List + Nth<Idx, Output = Fi>,
+// {
+// 		type InputLayer = <A as Nth<Idx>>::Output;
+//     type OutputLayer = Self::InputLayer;
+
+//     fn feedforward_at(&self, a: Self::InputLayer) -> Self::OutputLayer {
+//         // TODO: add switcher (in case switcher is not active, do not store activations even in array)
+//         let weights = &Nth::<Idx>::nth(&self.w).0;
+//         let bias = &Nth::<Idx>::nth(&self.b).0;
+
+//         let result = array::from_fn(|i| Fi::activate(vvadd(&vmdot(a, weights), bias), i));
+
+//         FeedforwardAt::<Succ<Idx>, NetLength>::feedforward_at(self, result)
+//     }
+// }
+
+trait TracingFeedforwardAt<Idx, NetLength> {
+    fn tracing_feedforward_at(&mut self) -> &mut Self;
+}
+
+// TODO: make separate structure FeedforwarderNetwork for prediction only
+// Or maybe name it Predictor? Anyway...
+struct NeuralNetwork<Wbza: ListQuartet, F: List> {
+    f: Feedforwarder<Wbza::W, Wbza::B, F>,
+
+    z: Wbza::Z,
+    a: Wbza::A,
+}
+
+impl<Idx, Wbza: ListQuartet, F: List> TracingFeedforwardAt<Idx, Zero> for NeuralNetwork<Wbza, F> {
+    fn tracing_feedforward_at(&mut self) -> &mut Self {
         self
     }
 }
 
-impl<Idx, Times, Wba, E, Fi, F, const AS: usize, const BS: usize, const CS: usize>
-    FeedforwardTimes<Idx, Succ<Times>> for NeuralNetwork<Wba, F>
+// TODO: maybe add separate function which just does feedforward without modifying NeuralNetwork data
+// It should allocate array with size of largest layers - then just use transmute for each layer.
+// Array should be passed as argument of the function.
+
+impl<Idx, NetLength, Wbza, E, Fi, F, const BS: usize, const CS: usize>
+    TracingFeedforwardAt<Idx, Succ<NetLength>> for NeuralNetwork<Wbza, F>
 where
-		Self: FeedforwardTimes<Succ<Idx>, Times>,
-    Wba: ListTrio,
-    Wba::W: Nth<Idx, Output = Layer<E, AS>>,
-    Wba::B: Nth<Idx, Output = Layer<E, CS>>,
-    Wba::A: Nth<Idx, Output = Layer<E, BS>> + Nth<Succ<Idx>, Output = Layer<E, CS>>,
+    Self: TracingFeedforwardAt<Succ<Idx>, NetLength>,
+    Wbza: ListQuartet,
+    Wbza::W: Nth<Idx, Output = Layer<E, BS, CS>>,
+    Wbza::B: Nth<Idx, Output = Layer<E, CS, 1>>,
+    Wbza::Z: Nth<Idx, Output = Layer<E, BS, 1>> + Nth<Succ<Idx>, Output = Layer<E, CS, 1>>,
+    Wbza::A: Nth<Idx, Output = Layer<E, BS, 1>> + Nth<Succ<Idx>, Output = Layer<E, CS, 1>>,
     E: linalg::Number,
     Fi: ActivationFn<E>,
     F: List + Nth<Idx, Output = Fi>,
 {
-    fn feedforward_times(&mut self) -> &mut Self {
-        let activations = &Nth::<Idx>::nth(&self.a).0;
-        let weights = &Nth::<Idx>::nth(&self.w).0;
-        let bias = &Nth::<Idx>::nth(&self.b).0;
+    fn tracing_feedforward_at(&mut self) -> &mut Self {
+        // TODO: add switcher (in case switcher is not active, do not store activations even in array)
+        let activations = &Nth::<Idx>::nth(&self.a).0[0];
+        let weights = &Nth::<Idx>::nth(&self.f.w).0;
+        let bias = &Nth::<Idx>::nth(&self.f.b).0[0];
 
-        Nth::<Succ<Idx>>::nth_mut(&mut self.a).0 = {
-            let activations = vvadd(&vmdot(activations, weights), bias);
-            array::from_fn(|i| Fi::activate(&activations, i))
-        };
+        Nth::<Succ<Idx>>::nth_mut(&mut self.z).0[0] = vvadd(&vmdot(activations, weights), bias);
+        Nth::<Succ<Idx>>::nth_mut(&mut self.a).0[0] =
+            array::from_fn(|i| Fi::activate(&Nth::<Succ<Idx>>::nth(&self.z).0[0], i));
 
-        FeedforwardTimes::<Succ<Idx>, Times>::feedforward_times(self)
+        TracingFeedforwardAt::<Succ<Idx>, NetLength>::tracing_feedforward_at(self)
     }
 }
 
-impl<Wba: ListTrio, F: List> NeuralNetwork<Wba, F>
+trait BackpropAt<Idx> {
+    type OutputLayer;
+
+    fn backprop_at(&mut self, expected: Self::OutputLayer) -> &mut Self;
+}
+
+impl<Wbza: ListQuartet, F: List> BackpropAt<Zero> for NeuralNetwork<Wbza, F>
 where
-		Self: FeedforwardTimes<Zero, <Wba::W as Length>::Output>,
-    Wba::W: Length,
+    Wbza::A: Nth<Zero>,
 {
-    fn feedforward(&mut self) -> &mut Self {
-        FeedforwardTimes::<Zero, <Wba::W as Length>::Output>::feedforward_times(self)
+    type OutputLayer = <Wbza::A as Nth<Zero>>::Output;
+
+    fn backprop_at(&mut self, _expected: Self::OutputLayer) -> &mut Self {
+        self
     }
 }
 
-trait ListTrio {
-    type W: List;
-    type B: List;
-    type A: List;
-}
-
-impl<W, B, A> ListTrio for (W, B, A)
+impl<Idx, Wbza: ListQuartet, E, F: List, const OS: usize> BackpropAt<Succ<Idx>>
+    for NeuralNetwork<Wbza, F>
 where
-    W: List + Default,
-    B: List + Default,
-    A: List + Default,
+    Self: BackpropAt<Idx>,
+    E: Default, // TODO: remove (currently it is used for test)
+    <Self as BackpropAt<Idx>>::OutputLayer: Default, // TODO: remove
+    Wbza::A: Nth<Idx, Output = <Self as BackpropAt<Idx>>::OutputLayer>
+        + Nth<Succ<Idx>, Output = Layer<E, OS, 1>>,
 {
-    type W = W;
-    type B = B;
-    type A = A;
+    type OutputLayer = <Wbza::A as Nth<Succ<Idx>>>::Output;
+
+    fn backprop_at(&mut self, _expected: Self::OutputLayer) -> &mut Self {
+        println!("hello");
+        BackpropAt::<Idx>::backprop_at(self, <Wbza::A as Nth<Idx>>::Output::default())
+    }
 }
 
-impl<Wba, F> NeuralNetwork<Wba, F>
+impl<Wbza: ListQuartet, F: List> NeuralNetwork<Wbza, F>
 where
-    Wba: ListTrio,
-    Wba::W: Default,
-    Wba::B: Default,
-    Wba::A: Default,
+    Self: TracingFeedforwardAt<Zero, <Wbza::W as Length>::Output>
+        + BackpropAt<<Wbza::W as Length>::Output>,
+    Wbza::W: Length,
+{
+    // TODO: maybe remove wrapper when non tracing feedforward will be implemented.
+    // Instead, normally, user should use non tracing feedforward.
+    fn tracing_feedforward(&mut self) -> &mut Self {
+        TracingFeedforwardAt::<Zero, <Wbza::W as Length>::Output>::tracing_feedforward_at(self)
+    }
+
+    fn backprop(
+        &mut self,
+        expected: <Self as BackpropAt<<Wbza::W as Length>::Output>>::OutputLayer,
+    ) -> &mut Self {
+        self.tracing_feedforward(); // TODO: add "switcher" to FeedforwardTimes trait, marking if to store z separately from a
+        BackpropAt::<<Wbza::W as Length>::Output>::backprop_at(self, expected)
+    }
+}
+
+impl<Wbza, F> NeuralNetwork<Wbza, F>
+where
+    Wbza: ListQuartet,
+    Wbza::W: Default, // TODO: don't use Default, instead initialize weights and biases randomly \
+    Wbza::B: Default, // considering type of activation function
+    Wbza::Z: Default,
+    Wbza::A: Default,
     F: List + Default,
 {
     fn new() -> Self {
         Self {
-            w: Wba::W::default(),
-            b: Wba::B::default(),
-            a: Wba::A::default(),
-            f: F::default(),
+            f: Feedforwarder {
+                w: Wbza::W::default(),
+                b: Wbza::B::default(),
+                f: F::default(),
+            },
+            z: Wbza::Z::default(),
+            a: Wbza::A::default(),
         }
     }
 }
@@ -249,20 +357,34 @@ macro_rules! Layers {
 				Nil
 		};
 		(@wbuilder $t:ty; {$sp:expr}, {$sn:expr} $(: $rn:ty)? $(, {$s:expr} $(: $r:ty)?)*) => {
-				Cons<Layer<$t, {$sp*$sn}>, Layers!(@wbuilder $t; {$sn} $(: $rn)* $(, {$s} $(: $r)?)*)>
+				Cons<Layer<$t, $sp, $sn>, Layers!(@wbuilder $t; {$sn} $(: $rn)* $(, {$s} $(: $r)?)*)>
 		};
 		(@wbuilder $t:ty; {$sp:expr} : $rp:ty, {$sn:expr} $(: $rn:ty)? $(, {$s:expr} $(: $r:ty)?)*) => {
-				<Cons<Layer<$t, {$sp*$sp}>,
+				<Cons<Layer<$t, $sp, $sp>,
 				    Layers!(@wbuilder $t; {$sp}, {$sn} $(: $rn)* $(, {$s} $(: $r)?)*)
 				> as Repeat<<$rp as Prec>::Output>>::Output
 		};
 		($t:ty; {$sn:expr} $(: $rn:ty)? $(, {$s:expr} $(: $r:ty)?)*) => {
 				(
 						Layers!(@wbuilder $t; {$sn} $(: $rn)* $(, {$s} $(: $r)*)*),
-						HList!($(Layer<$t, $s> $(: $r)*),*),
-						HList!(Layer<$t, $sn> $(: $rn)* $(, Layer<$t, $s> $(: $r)*)*),
+						HList!($(Layer<$t, $s, 1> $(: $r)*),*),
+						HList!(Layer<$t, $sn, 1> $(: $rn)* $(, Layer<$t, $s, 1> $(: $r)*)*),
+						HList!(Layer<$t, $sn, 1> $(: $rn)* $(, Layer<$t, $s, 1> $(: $r)*)*),
 				)
 		};
+}
+
+pub fn feedforward_sum() {
+    type Wbza = Layers!(f32; {2}, {9}: S8, {1});
+    type F = HList!(Relu: S8<S1>);
+
+    let mut nn = NeuralNetwork::<Wbza, F>::new();
+    nn.f.w.0.0 = [[1.; 2]; 9];
+    nn.a.0.0 = [[2., 3.]; 1];
+
+    nn.tracing_feedforward();
+    println!("{:?}", nn.a.1.0);
+    assert!(f32::abs(nn.a.1.0.0[0][0] - 5.) < 0.000001);
 }
 
 #[cfg(test)]
@@ -271,51 +393,85 @@ mod tests {
 
     #[test]
     fn create_some_layers() {
-        let (w, b, a) = <Layers!(f32; {7}, {4}: S2<S1>, {3})>::default();
+        let (w, b, z, a) = <Layers!(f32; {7}, {4}: S2<S1>, {3})>::default();
 
-        assert_eq!(w.0.0.len(), 28);
-        assert_eq!(w.1.0.0.len(), 16);
-        assert_eq!(w.1.1.0.0.len(), 16);
-        assert_eq!(w.1.1.1.0.0.len(), 12);
+        assert_eq!(w.0.0.len(), 4);
+        assert_eq!(w.0.0[0].len(), 7);
+        assert_eq!(w.1.0.0.len(), 4);
+        assert_eq!(w.1.0.0[0].len(), 4);
+        assert_eq!(w.1.1.0.0.len(), 4);
+        assert_eq!(w.1.0.0[0].len(), 4);
+        assert_eq!(w.1.1.1.0.0.len(), 3);
+        assert_eq!(w.1.1.1.0.0[0].len(), 4);
 
-        assert_eq!(b.0.0.len(), 4);
-        assert_eq!(b.1.0.0.len(), 4);
-        assert_eq!(b.1.1.0.0.len(), 4);
-        assert_eq!(b.1.1.1.0.0.len(), 3);
+        assert_eq!(b.0.0.len(), 1);
+        assert_eq!(b.0.0[0].len(), 4);
+        assert_eq!(b.1.0.0.len(), 1);
+        assert_eq!(b.1.0.0[0].len(), 4);
+        assert_eq!(b.1.1.0.0.len(), 1);
+        assert_eq!(b.1.1.0.0[0].len(), 4);
+        assert_eq!(b.1.1.1.0.0.len(), 1);
+        assert_eq!(b.1.1.1.0.0[0].len(), 3);
 
-        assert_eq!(a.0.0.len(), 7);
-        assert_eq!(a.1.0.0.len(), 4);
-        assert_eq!(a.1.1.0.0.len(), 4);
-        assert_eq!(a.1.1.1.0.0.len(), 4);
-        assert_eq!(a.1.1.1.1.0.0.len(), 3);
+        assert_eq!(z.0.0.len(), 1);
+        assert_eq!(z.0.0[0].len(), 7);
+        assert_eq!(z.1.0.0.len(), 1);
+        assert_eq!(z.1.0.0[0].len(), 4);
+        assert_eq!(z.1.1.0.0.len(), 1);
+        assert_eq!(z.1.1.0.0[0].len(), 4);
+        assert_eq!(z.1.1.1.0.0.len(), 1);
+        assert_eq!(z.1.1.1.0.0[0].len(), 4);
+        assert_eq!(z.1.1.1.1.0.0.len(), 1);
+        assert_eq!(z.1.1.1.1.0.0[0].len(), 3);
+
+        assert_eq!(a.0.0.len(), 1);
+        assert_eq!(a.0.0[0].len(), 7);
+        assert_eq!(a.1.0.0.len(), 1);
+        assert_eq!(a.1.0.0[0].len(), 4);
+        assert_eq!(a.1.1.0.0.len(), 1);
+        assert_eq!(a.1.1.0.0[0].len(), 4);
+        assert_eq!(a.1.1.1.0.0.len(), 1);
+        assert_eq!(a.1.1.1.0.0[0].len(), 4);
+        assert_eq!(a.1.1.1.1.0.0.len(), 1);
+        assert_eq!(a.1.1.1.1.0.0[0].len(), 3);
     }
 
     #[test]
     fn some_feedforward() {
-        type Wba = Layers!(f32; {4}, {8}, {3});
+        type Wbza = Layers!(f32; {4}, {8}, {3});
         type F = HList!(Sigmoid: S2);
 
-        let mut nn = NeuralNetwork::<Wba, F>::new();
-        nn.w.0.0 = [1.; 32];
-        nn.a.0.0 = [1.; 4];
-        nn.w.1.0.0 = [1.; 24];
-        nn.b.1.0.0 = [1.; 3];
+        let mut nn = NeuralNetwork::<Wbza, F>::new();
+        nn.f.w.0.0 = [[1.; 4]; 8];
+        nn.a.0.0 = [[1.; 4]];
+        nn.f.w.1.0.0 = [[1.; 8]; 3];
+        nn.f.b.1.0.0 = [[1.; 3]];
 
-        nn.feedforward();
+        nn.tracing_feedforward();
 
         println!("{:?}", nn.a.0);
     }
 
     #[test]
     fn feedforward_sum() {
-        type Wba = Layers!(f32; {2}, {1});
+        type Wbza = Layers!(f32; {2}, {1});
         type F = HList!(Relu);
 
-        let mut nn = NeuralNetwork::<Wba, F>::new();
-        nn.w.0.0 = [1., 1.];
-        nn.a.0.0 = [2., 3.];
+        let mut nn = NeuralNetwork::<Wbza, F>::new();
+        nn.f.w.0.0 = [[1., 1.]];
+        nn.a.0.0 = [[2., 3.]];
 
-        nn.feedforward();
-        assert!(f32::abs(nn.a.1.0.0[0] - 5.) < 0.000001);
+        nn.tracing_feedforward();
+        assert!(f32::abs(nn.a.1.0.0[0][0] - 5.) < 0.000001);
+    }
+
+    #[test]
+    fn some_backprop() {
+        type Wbza = Layers!(f32; {4}, {8}, {3});
+        type F = HList!(Sigmoid: S2);
+
+        let mut nn = NeuralNetwork::<Wbza, F>::new();
+
+        nn.backprop(Layer([[0.; 3]]));
     }
 }
