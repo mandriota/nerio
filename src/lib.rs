@@ -193,7 +193,7 @@ impl<Idx, W: List, B: List, E, F: List, const FINAL: usize> FeedforwardAt<Idx, Z
 {
     type OutputLayer = Layer<E, FINAL, 1>;
 
-    fn feedforward_at(&self, a: Layer<E, FINAL, 1>) -> Layer<E, FINAL, 1> {
+    fn feedforward_at(&self, a: Self::OutputLayer) -> Self::OutputLayer {
         a
     }
 }
@@ -208,7 +208,7 @@ where
     Fi: ActivationFn<E>,
     F: List + Nth<Idx, Output = Fi>,
 {
-    type OutputLayer = <Self as FeedforwardAt<Succ<Idx>, NetLength, E, SINK>>::OutputLayer;
+    type OutputLayer = Layer<E, FINAL, 1>;
 
     fn feedforward_at(&self, a: Layer<E, FEED, 1>) -> Self::OutputLayer {
         let weights = &Nth::<Idx>::nth(&self.w).0;
@@ -226,7 +226,7 @@ impl<W, B, E, Fi, F, const FEED: usize, const SINK: usize, const FINAL: usize>
 where
     Self: FeedforwardAt<Zero, <B as Length>::Output, E, FEED, OutputLayer = Layer<E, FINAL, 1>>,
     W: List + Nth<Zero, Output = Layer<E, FEED, SINK>>,
-    B: List + Length + Nth<Zero, Output = Layer<E, SINK, 1>>,
+    B: List + Nth<Zero, Output = Layer<E, SINK, 1>> + Length,
     E: linalg::Number,
     Fi: ActivationFn<E>,
     F: List + Nth<Zero, Output = Fi>,
