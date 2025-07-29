@@ -313,14 +313,14 @@ where
     }
 }
 
-impl<Idx, Wbza: ListQuartet, E, F: List, const OS: usize> BackpropAt<Succ<Idx>>
+impl<Idx, Wbza: ListQuartet, E, F: List, const SINK: usize> BackpropAt<Succ<Idx>>
     for NeuralNetwork<Wbza, F>
 where
     Self: BackpropAt<Idx>,
     E: Default, // TODO: remove (currently it is used for test)
     <Self as BackpropAt<Idx>>::OutputLayer: Default, // TODO: remove
     Wbza::A: Nth<Idx, Output = <Self as BackpropAt<Idx>>::OutputLayer>
-        + Nth<Succ<Idx>, Output = Layer<E, OS, 1>>,
+        + Nth<Succ<Idx>, Output = Layer<E, SINK, 1>>,
 {
     type OutputLayer = <Wbza::A as Nth<Succ<Idx>>>::Output;
 
