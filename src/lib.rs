@@ -226,7 +226,7 @@ impl<W, B, E, Fi, F, const FEED: usize, const SINK: usize, const FINAL: usize>
 where
     Self: FeedforwardAt<Zero, <B as Length>::Output, E, FEED, OutputLayer = Layer<E, FINAL, 1>>,
     W: List + Nth<Zero, Output = Layer<E, FEED, SINK>>,
-    B: List + Length + Nth<Zero, Output = Layer<E, SINK, 1>>, //, Output = Layer<E, FS, 1>>,
+    B: List + Length + Nth<Zero, Output = Layer<E, SINK, 1>>,
     E: linalg::Number,
     Fi: ActivationFn<E>,
     F: List + Nth<Zero, Output = Fi>,
