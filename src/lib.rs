@@ -175,7 +175,7 @@ impl<E: linalg::Number> ActivationFn<E> for Relu {
     }
 }
 
-trait FeedforwardAt<Idx, NetLength, E, const BS: usize> {
+trait FeedforwardAt<Idx, RemLayers, E, const BS: usize> {
     type OutputLayer;
 
     fn feedforward_at(&self, a: Layer<E, BS, 1>) -> Self::OutputLayer;
@@ -198,10 +198,10 @@ impl<Idx, W: List, B: List, E, F: List, const FINAL: usize> FeedforwardAt<Idx, Z
     }
 }
 
-impl<Idx, NetLength, W, B, E, Fi, F, const FEED: usize, const SINK: usize, const FINAL: usize>
-    FeedforwardAt<Idx, Succ<NetLength>, E, FEED> for Feedforwarder<W, B, F>
+impl<Idx, RemLayers, W, B, E, Fi, F, const FEED: usize, const SINK: usize, const FINAL: usize>
+    FeedforwardAt<Idx, Succ<RemLayers>, E, FEED> for Feedforwarder<W, B, F>
 where
-    Self: FeedforwardAt<Succ<Idx>, NetLength, E, SINK, OutputLayer = Layer<E, FINAL, 1>>,
+    Self: FeedforwardAt<Succ<Idx>, RemLayers, E, SINK, OutputLayer = Layer<E, FINAL, 1>>,
     W: List + Nth<Idx, Output = Layer<E, FEED, SINK>>,
     B: List + Nth<Idx, Output = Layer<E, SINK, 1>>,
     E: linalg::Number,
@@ -217,7 +217,7 @@ where
         let result: [E; SINK] =
             array::from_fn(|i| Fi::activate(&vvadd(&vmdot(&a.0[0], weights), bias), i));
 
-        FeedforwardAt::<Succ<Idx>, NetLength, E, SINK>::feedforward_at(self, Layer([result]))
+        FeedforwardAt::<Succ<Idx>, RemLayers, E, SINK>::feedforward_at(self, Layer([result]))
     }
 }
 
@@ -236,7 +236,7 @@ where
     }
 }
 
-trait TracingFeedforwardAt<Idx, NetLength> {
+trait TracingFeedforwardAt<Idx, RemLayers> {
     fn tracing_feedforward_at(&mut self) -> &mut Self;
 }
 
@@ -259,10 +259,10 @@ impl<Idx, Wbza: ListQuartet, F: List> TracingFeedforwardAt<Idx, Zero> for Neural
 // It should allocate array with size of largest layers - then just use transmute for each layer.
 // Array should be passed as argument of the function.
 
-impl<Idx, NetLength, Wbza, E, Fi, F, const FEED: usize, const SINK: usize>
-    TracingFeedforwardAt<Idx, Succ<NetLength>> for NeuralNetwork<Wbza, F>
+impl<Idx, RemLayers, Wbza, E, Fi, F, const FEED: usize, const SINK: usize>
+    TracingFeedforwardAt<Idx, Succ<RemLayers>> for NeuralNetwork<Wbza, F>
 where
-    Self: TracingFeedforwardAt<Succ<Idx>, NetLength>,
+    Self: TracingFeedforwardAt<Succ<Idx>, RemLayers>,
     Wbza: ListQuartet,
     Wbza::W: Nth<Idx, Output = Layer<E, FEED, SINK>>,
     Wbza::B: Nth<Idx, Output = Layer<E, SINK, 1>>,
@@ -282,7 +282,7 @@ where
         Nth::<Succ<Idx>>::nth_mut(&mut self.a).0[0] =
             array::from_fn(|i| Fi::activate(&Nth::<Succ<Idx>>::nth(&self.z).0[0], i));
 
-        TracingFeedforwardAt::<Succ<Idx>, NetLength>::tracing_feedforward_at(self)
+        TracingFeedforwardAt::<Succ<Idx>, RemLayers>::tracing_feedforward_at(self)
     }
 }
 
