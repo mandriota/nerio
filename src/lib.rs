@@ -175,11 +175,10 @@ impl<E: linalg::Number> ActivationFn<E> for Relu {
     }
 }
 
-trait FeedforwardAt<Idx, NetLength> {
-    type InputLayer;
+trait FeedforwardAt<Idx, NetLength, E, const BS: usize> {
     type OutputLayer;
 
-    fn feedforward_at(&self, a: Self::InputLayer) -> Self::OutputLayer;
+    fn feedforward_at(&self, a: Layer<E, BS, 1>) -> Self::OutputLayer;
 }
 
 struct Feedforwarder<W: List, B: List, F: List> {
@@ -189,47 +188,58 @@ struct Feedforwarder<W: List, B: List, F: List> {
     f: F,
 }
 
-// impl<Idx, W: List, B: List, F: List> FeedforwardAt<Idx, Zero> for Feedforwarder<W, B, F>
-// where
-//     B: Nth<Idx>,
-// {
-//     type InputLayer = <B as Nth<Idx>>::Output;
-//     type OutputLayer = Self::InputLayer;
+impl<Idx, W: List, B: List, E, F: List, const BS: usize> FeedforwardAt<Idx, Zero, E, BS>
+    for Feedforwarder<W, B, F>
+{
+    type OutputLayer = Layer<E, BS, 1>;
 
-//     fn feedforward_at(&self, a: Self::InputLayer) -> Self::OutputLayer {
-//         a
-//     }
-// }
+    fn feedforward_at(&self, a: Layer<E, BS, 1>) -> Layer<E, BS, 1> {
+        a
+    }
+}
 
-// impl<Idx, NetLength, W, B, E, Fi, F, const AS: usize, const CS: usize>
-//     FeedforwardAt<Idx, Succ<NetLength>> for Feedforwarder<W, B, F>
-// where
-//     Self: FeedforwardAt<Succ<Idx>, NetLength>,
-//     W: List + Nth<Idx, Output = Layer<E, AS>>,
-//     B: List + Nth<Idx, Output = Layer<E, CS>>,
-//     E: linalg::Number,
-//     Fi: ActivationFn<E>,
-//     F: List + Nth<Idx, Output = Fi>,
-// {
-// 		type InputLayer = <A as Nth<Idx>>::Output;
-//     type OutputLayer = Self::InputLayer;
+impl<Idx, NetLength, W, B, E, Fi, F, const BS: usize, const CS: usize, const FS: usize>
+    FeedforwardAt<Idx, Succ<NetLength>, E, BS> for Feedforwarder<W, B, F>
+where
+    Self: FeedforwardAt<Succ<Idx>, NetLength, E, CS, OutputLayer = Layer<E, FS, 1>>,
+    W: List + Nth<Idx, Output = Layer<E, BS, CS>>,
+    B: List + Nth<Idx, Output = Layer<E, CS, 1>>,
+    E: linalg::Number,
+    Fi: ActivationFn<E>,
+    F: List + Nth<Idx, Output = Fi>,
+{
+    type OutputLayer = <Self as FeedforwardAt<Succ<Idx>, NetLength, E, CS>>::OutputLayer;
 
-//     fn feedforward_at(&self, a: Self::InputLayer) -> Self::OutputLayer {
-//         // TODO: add switcher (in case switcher is not active, do not store activations even in array)
-//         let weights = &Nth::<Idx>::nth(&self.w).0;
-//         let bias = &Nth::<Idx>::nth(&self.b).0;
+    fn feedforward_at(&self, a: Layer<E, BS, 1>) -> Self::OutputLayer {
+        let weights = &Nth::<Idx>::nth(&self.w).0;
+        let bias = &Nth::<Idx>::nth(&self.b).0[0];
 
-//         let result = array::from_fn(|i| Fi::activate(vvadd(&vmdot(a, weights), bias), i));
+        let result: [E; CS] =
+            array::from_fn(|i| Fi::activate(&vvadd(&vmdot(&a.0[0], weights), bias), i));
 
-//         FeedforwardAt::<Succ<Idx>, NetLength>::feedforward_at(self, result)
-//     }
-// }
+        FeedforwardAt::<Succ<Idx>, NetLength, E, CS>::feedforward_at(self, Layer([result]))
+    }
+}
+
+impl<W, B, E, Fi, F, const BS: usize, const CS: usize, const FS: usize> Feedforwarder<W, B, F>
+where
+    Self: FeedforwardAt<Zero, <B as Length>::Output, E, BS, OutputLayer = Layer<E, FS, 1>>,
+    W: List + Nth<Zero, Output = Layer<E, BS, CS>>,
+    B: List + Length + Nth<Zero, Output = Layer<E, CS, 1>>, //, Output = Layer<E, FS, 1>>,
+		E: linalg::Number,
+    Fi: ActivationFn<E>,
+    F: List + Nth<Zero, Output = Fi>,
+{
+    fn feedforward(&self, a: Layer<E, BS, 1>) -> Layer<E, FS, 1> {
+        FeedforwardAt::<Zero, <B as Length>::Output, E, BS>::feedforward_at(self, a)
+    }
+}
 
 trait TracingFeedforwardAt<Idx, NetLength> {
     fn tracing_feedforward_at(&mut self) -> &mut Self;
 }
 
-// TODO: make separate structure FeedforwarderNetwork for prediction only
+// DONE: make separate structure FeedforwarderNetwork for prediction only
 // Or maybe name it Predictor? Anyway...
 struct NeuralNetwork<Wbza: ListQuartet, F: List> {
     f: Feedforwarder<Wbza::W, Wbza::B, F>,
@@ -304,11 +314,13 @@ where
     type OutputLayer = <Wbza::A as Nth<Succ<Idx>>>::Output;
 
     fn backprop_at(&mut self, _expected: Self::OutputLayer) -> &mut Self {
-        println!("hello");
+        println!("backprop iteration");
         BackpropAt::<Idx>::backprop_at(self, <Wbza::A as Nth<Idx>>::Output::default())
     }
 }
 
+// TODO: use mostly B as reference length, because it is equal to W length.
+// In this way, in theory, Length trait may be cached by the prover.
 impl<Wbza: ListQuartet, F: List> NeuralNetwork<Wbza, F>
 where
     Self: TracingFeedforwardAt<Zero, <Wbza::W as Length>::Output>
@@ -383,7 +395,6 @@ pub fn feedforward_sum() {
     nn.a.0.0 = [[2., 3.]; 1];
 
     nn.tracing_feedforward();
-    println!("{:?}", nn.a.1.0);
     assert!(f32::abs(nn.a.1.0.0[0][0] - 5.) < 0.000001);
 }
 
@@ -437,8 +448,11 @@ mod tests {
     }
 
     #[test]
-    fn some_feedforward() {
+    fn some_tracing_feedforward() {
         type Wbza = Layers!(f32; {4}, {8}, {3});
+				// TODO: add troubleshootig section to docs about what obscure rust errors may indicate
+				// Inlucding this ("... but its trait bounds were not satisfied"):
+				// It often indicated that Length of F is shorter than L-1.
         type F = HList!(Sigmoid: S2);
 
         let mut nn = NeuralNetwork::<Wbza, F>::new();
@@ -453,7 +467,7 @@ mod tests {
     }
 
     #[test]
-    fn feedforward_sum() {
+    fn tracing_feedforward_sum() {
         type Wbza = Layers!(f32; {2}, {1});
         type F = HList!(Relu);
 
@@ -463,6 +477,21 @@ mod tests {
 
         nn.tracing_feedforward();
         assert!(f32::abs(nn.a.1.0.0[0][0] - 5.) < 0.000001);
+    }
+
+    #[test]
+    fn feedforward_triple_sum() {
+        type Wbza = Layers!(f32; {2}, {3}, {1});
+        type F = HList!(Relu: S2);
+
+        let mut nn = NeuralNetwork::<Wbza, F>::new();
+        nn.f.w.0.0 = [[1.; 2]; 3];
+				nn.f.w.1.0.0 = [[1.; 3]];
+
+        let result = nn.f.feedforward(Layer([[2., 5.]]));
+
+				// Network evaluation should be (2+5)*3=21
+        assert!(f32::abs(result.0[0][0] - 21.) < 0.000001);
     }
 
     #[test]
