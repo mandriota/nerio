@@ -186,10 +186,10 @@ impl<E: linalg::Number> ActivationFn<E> for Softmax {
     }
 }
 
-trait FeedforwardAt<Idx, RemLayers, E, const BS: usize> {
+trait FeedforwardAt<Idx, RemLayers, E, const FEED: usize> {
     type OutputLayer;
 
-    fn feedforward_at(&self, a: Layer<E, BS, 1>) -> Self::OutputLayer;
+    fn feedforward_at(&self, a: Layer<E, FEED, 1>) -> Self::OutputLayer;
 }
 
 struct Feedforwarder<W: List, B: List, F: List> {
