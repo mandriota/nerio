@@ -188,50 +188,51 @@ struct Feedforwarder<W: List, B: List, F: List> {
     f: F,
 }
 
-impl<Idx, W: List, B: List, E, F: List, const BS: usize> FeedforwardAt<Idx, Zero, E, BS>
+impl<Idx, W: List, B: List, E, F: List, const FINAL: usize> FeedforwardAt<Idx, Zero, E, FINAL>
     for Feedforwarder<W, B, F>
 {
-    type OutputLayer = Layer<E, BS, 1>;
+    type OutputLayer = Layer<E, FINAL, 1>;
 
-    fn feedforward_at(&self, a: Layer<E, BS, 1>) -> Layer<E, BS, 1> {
+    fn feedforward_at(&self, a: Layer<E, FINAL, 1>) -> Layer<E, FINAL, 1> {
         a
     }
 }
 
-impl<Idx, NetLength, W, B, E, Fi, F, const BS: usize, const CS: usize, const FS: usize>
-    FeedforwardAt<Idx, Succ<NetLength>, E, BS> for Feedforwarder<W, B, F>
+impl<Idx, NetLength, W, B, E, Fi, F, const FEED: usize, const SINK: usize, const FINAL: usize>
+    FeedforwardAt<Idx, Succ<NetLength>, E, FEED> for Feedforwarder<W, B, F>
 where
-    Self: FeedforwardAt<Succ<Idx>, NetLength, E, CS, OutputLayer = Layer<E, FS, 1>>,
-    W: List + Nth<Idx, Output = Layer<E, BS, CS>>,
-    B: List + Nth<Idx, Output = Layer<E, CS, 1>>,
+    Self: FeedforwardAt<Succ<Idx>, NetLength, E, SINK, OutputLayer = Layer<E, FINAL, 1>>,
+    W: List + Nth<Idx, Output = Layer<E, FEED, SINK>>,
+    B: List + Nth<Idx, Output = Layer<E, SINK, 1>>,
     E: linalg::Number,
     Fi: ActivationFn<E>,
     F: List + Nth<Idx, Output = Fi>,
 {
-    type OutputLayer = <Self as FeedforwardAt<Succ<Idx>, NetLength, E, CS>>::OutputLayer;
+    type OutputLayer = <Self as FeedforwardAt<Succ<Idx>, NetLength, E, SINK>>::OutputLayer;
 
-    fn feedforward_at(&self, a: Layer<E, BS, 1>) -> Self::OutputLayer {
+    fn feedforward_at(&self, a: Layer<E, FEED, 1>) -> Self::OutputLayer {
         let weights = &Nth::<Idx>::nth(&self.w).0;
         let bias = &Nth::<Idx>::nth(&self.b).0[0];
 
-        let result: [E; CS] =
+        let result: [E; SINK] =
             array::from_fn(|i| Fi::activate(&vvadd(&vmdot(&a.0[0], weights), bias), i));
 
-        FeedforwardAt::<Succ<Idx>, NetLength, E, CS>::feedforward_at(self, Layer([result]))
+        FeedforwardAt::<Succ<Idx>, NetLength, E, SINK>::feedforward_at(self, Layer([result]))
     }
 }
 
-impl<W, B, E, Fi, F, const BS: usize, const CS: usize, const FS: usize> Feedforwarder<W, B, F>
+impl<W, B, E, Fi, F, const FEED: usize, const SINK: usize, const FINAL: usize>
+    Feedforwarder<W, B, F>
 where
-    Self: FeedforwardAt<Zero, <B as Length>::Output, E, BS, OutputLayer = Layer<E, FS, 1>>,
-    W: List + Nth<Zero, Output = Layer<E, BS, CS>>,
-    B: List + Length + Nth<Zero, Output = Layer<E, CS, 1>>, //, Output = Layer<E, FS, 1>>,
-		E: linalg::Number,
+    Self: FeedforwardAt<Zero, <B as Length>::Output, E, FEED, OutputLayer = Layer<E, FINAL, 1>>,
+    W: List + Nth<Zero, Output = Layer<E, FEED, SINK>>,
+    B: List + Length + Nth<Zero, Output = Layer<E, SINK, 1>>, //, Output = Layer<E, FS, 1>>,
+    E: linalg::Number,
     Fi: ActivationFn<E>,
     F: List + Nth<Zero, Output = Fi>,
 {
-    fn feedforward(&self, a: Layer<E, BS, 1>) -> Layer<E, FS, 1> {
-        FeedforwardAt::<Zero, <B as Length>::Output, E, BS>::feedforward_at(self, a)
+    fn feedforward(&self, a: Layer<E, FEED, 1>) -> Layer<E, FINAL, 1> {
+        FeedforwardAt::<Zero, <B as Length>::Output, E, FEED>::feedforward_at(self, a)
     }
 }
 
@@ -258,15 +259,15 @@ impl<Idx, Wbza: ListQuartet, F: List> TracingFeedforwardAt<Idx, Zero> for Neural
 // It should allocate array with size of largest layers - then just use transmute for each layer.
 // Array should be passed as argument of the function.
 
-impl<Idx, NetLength, Wbza, E, Fi, F, const BS: usize, const CS: usize>
+impl<Idx, NetLength, Wbza, E, Fi, F, const FEED: usize, const SINK: usize>
     TracingFeedforwardAt<Idx, Succ<NetLength>> for NeuralNetwork<Wbza, F>
 where
     Self: TracingFeedforwardAt<Succ<Idx>, NetLength>,
     Wbza: ListQuartet,
-    Wbza::W: Nth<Idx, Output = Layer<E, BS, CS>>,
-    Wbza::B: Nth<Idx, Output = Layer<E, CS, 1>>,
-    Wbza::Z: Nth<Idx, Output = Layer<E, BS, 1>> + Nth<Succ<Idx>, Output = Layer<E, CS, 1>>,
-    Wbza::A: Nth<Idx, Output = Layer<E, BS, 1>> + Nth<Succ<Idx>, Output = Layer<E, CS, 1>>,
+    Wbza::W: Nth<Idx, Output = Layer<E, FEED, SINK>>,
+    Wbza::B: Nth<Idx, Output = Layer<E, SINK, 1>>,
+    Wbza::Z: Nth<Idx, Output = Layer<E, FEED, 1>> + Nth<Succ<Idx>, Output = Layer<E, SINK, 1>>,
+    Wbza::A: Nth<Idx, Output = Layer<E, FEED, 1>> + Nth<Succ<Idx>, Output = Layer<E, SINK, 1>>,
     E: linalg::Number,
     Fi: ActivationFn<E>,
     F: List + Nth<Idx, Output = Fi>,
@@ -450,9 +451,9 @@ mod tests {
     #[test]
     fn some_tracing_feedforward() {
         type Wbza = Layers!(f32; {4}, {8}, {3});
-				// TODO: add troubleshootig section to docs about what obscure rust errors may indicate
-				// Inlucding this ("... but its trait bounds were not satisfied"):
-				// It often indicated that Length of F is shorter than L-1.
+        // TODO: add troubleshooting section to docs about what obscure rust errors may indicate
+        // Including this ("... but its trait bounds were not satisfied"):
+        // It often indicated that Length of F is shorter than L-1.
         type F = HList!(Sigmoid: S2);
 
         let mut nn = NeuralNetwork::<Wbza, F>::new();
@@ -486,11 +487,11 @@ mod tests {
 
         let mut nn = NeuralNetwork::<Wbza, F>::new();
         nn.f.w.0.0 = [[1.; 2]; 3];
-				nn.f.w.1.0.0 = [[1.; 3]];
+        nn.f.w.1.0.0 = [[1.; 3]];
 
         let result = nn.f.feedforward(Layer([[2., 5.]]));
 
-				// Network evaluation should be (2+5)*3=21
+        // NOTE: Network evaluation should be (2+5)*3=21
         assert!(f32::abs(result.0[0][0] - 21.) < 0.000001);
     }
 
