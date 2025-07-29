@@ -17,6 +17,7 @@ pub trait Number:
     + Add<Output = Self>
     + Sub<Output = Self>
     + Div<Output = Self>
+		+ for<'a> std::iter::Sum<&'a Self>
 {
     fn get_exp(self) -> Self;
     fn get_max(self, r: Self) -> Self;

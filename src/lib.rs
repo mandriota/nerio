@@ -154,15 +154,15 @@ impl<E: Default, const R: usize, const C: usize> Default for Layer<E, R, C> {
 }
 
 trait ActivationFn<E> {
-    fn activate<const S: usize>(z: &[E; S], i: usize) -> E;
+    fn activate<const S: usize>(z: &[E; S]) -> [E; S];
 }
 
 #[derive(Default)]
 struct Sigmoid;
 
 impl<E: linalg::Number> ActivationFn<E> for Sigmoid {
-    fn activate<const S: usize>(z: &[E; S], i: usize) -> E {
-        E::one() / (E::get_exp(-z[i]) + E::one())
+    fn activate<const S: usize>(z: &[E; S]) -> [E; S] {
+        z.map(|e| E::one() / (E::get_exp(-e) + E::one()))
     }
 }
 
@@ -170,8 +170,19 @@ impl<E: linalg::Number> ActivationFn<E> for Sigmoid {
 struct Relu;
 
 impl<E: linalg::Number> ActivationFn<E> for Relu {
-    fn activate<const S: usize>(z: &[E; S], i: usize) -> E {
-        E::get_max(z[i], E::default())
+    fn activate<const S: usize>(z: &[E; S]) -> [E; S] {
+        z.map(|e| E::get_max(e, E::default()))
+    }
+}
+
+#[derive(Default)]
+struct Softmax;
+
+impl<E: linalg::Number> ActivationFn<E> for Softmax {
+    fn activate<const S: usize>(z: &[E; S]) -> [E; S] {
+        let t = z.map(|e| E::get_exp(e));
+        let s = t.iter().sum();
+        t.map(|e| e / s)
     }
 }
 
@@ -214,8 +225,7 @@ where
         let weights = &Nth::<Idx>::nth(&self.w).0;
         let bias = &Nth::<Idx>::nth(&self.b).0[0];
 
-        let result: [E; SINK] =
-            array::from_fn(|i| Fi::activate(&vvadd(&vmdot(&a.0[0], weights), bias), i));
+        let result = Fi::activate(&vvadd(&vmdot(&a.0[0], weights), bias));
 
         FeedforwardAt::<Succ<Idx>, RemLayers, E, SINK>::feedforward_at(self, Layer([result]))
     }
@@ -280,7 +290,7 @@ where
 
         Nth::<Succ<Idx>>::nth_mut(&mut self.z).0[0] = vvadd(&vmdot(activations, weights), bias);
         Nth::<Succ<Idx>>::nth_mut(&mut self.a).0[0] =
-            array::from_fn(|i| Fi::activate(&Nth::<Succ<Idx>>::nth(&self.z).0[0], i));
+            Fi::activate(&Nth::<Succ<Idx>>::nth(&self.z).0[0]);
 
         TracingFeedforwardAt::<Succ<Idx>, RemLayers>::tracing_feedforward_at(self)
     }
@@ -504,4 +514,9 @@ mod tests {
 
         nn.backprop(Layer([[0.; 3]]));
     }
+
+		#[test]
+		fn softmax() {
+				println!("{:?}", Softmax::activate(&[2.0, 1.0, 0.1]))
+		}
 }
